@@ -9,6 +9,7 @@ public class NNHandler : System.IDisposable
     {
         model = ModelLoader.Load(nnmodel);
         worker = WorkerFactory.CreateWorker(model);
+        //WorkerFactory.CreateWorker()為Barracuda的API
     }
 
     public void Dispose()

@@ -31,6 +31,9 @@ namespace Assets.Scripts.TextureProviders
         public virtual Texture2D GetTexture()
         {
             return TextureTools.ResizeAndCropToCenter(InputTexture, ref ResultTexture, ResultTexture.width, ResultTexture.height);
+            /*
+            TextureTools.cs中實作ResizeAndCropToCenter()
+            */
         }
 
         public abstract TextureProviderType.ProviderType TypeEnum();
@@ -43,7 +46,7 @@ namespace Assets.Scripts.TextureProviders
 
         static TextureProviderType()
         {
-            providers = new TextureProvider[]{ 
+            providers = new TextureProvider[]{
                 RuntimeHelpers.GetUninitializedObject(typeof(WebCamTextureProvider)) as WebCamTextureProvider,
                 RuntimeHelpers.GetUninitializedObject(typeof(VideoTextureProvider)) as VideoTextureProvider };
         }
@@ -56,7 +59,7 @@ namespace Assets.Scripts.TextureProviders
 
         static public Type GetProviderType(ProviderType type)
         {
-            foreach(var provider in providers)
+            foreach (var provider in providers)
             {
                 if (provider.TypeEnum() == type)
                     return provider.GetType();
