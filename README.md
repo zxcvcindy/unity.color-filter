@@ -1,3 +1,4 @@
+<!--
 # YOLOv8 Unity 
 YOLOv8 Unity integrates cutting-edge and state-of-the-art Deep Learning models with the Unity engine using the Barracuda library. It contains examples of **Object Detection** and **Instance Segmentation**.  
    
@@ -29,3 +30,4 @@ To run object detection you need to obtain the onnx version of the detection mod
 4. Select *Main Camera*.
 5. In the *Detector* component point your detection model in the *Model File* field.
 6. Run the scene.
+-->
