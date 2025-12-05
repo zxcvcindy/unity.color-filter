@@ -40,7 +40,18 @@ public class Detector : MonoBehaviour
     protected NNHandler nn;
     protected Color[] colorArray = new Color[] { Color.red };
 
+    [SerializeField] Shader colorBlindShader;
+    //[SerializeField, Range(0f, 1f)] float colorBlindIntensity = 0.7f;
+    [SerializeField] int colorBlindMode = 0; // 0=prot,1=deut,2=tri
+
+    Material colorBlindMaterial;
+    // Material 是 Unity 內建的 UnityEngine.Material 類別，不需要額外安裝。它用來包裝 shader 並存放每個實例的參數，然後掛在 Renderer/RawImage 等元件上。
+    readonly Vector4[] boxBuffer = new Vector4[64];
+    int boxCount;
     YOLOv8 yolo;
+    RenderTexture _rt;
+
+    [SerializeField, Range(0f, 1f)] float warpStrength = 0.7f;
 
     private void OnEnable()
     //當進入play mode， GameObject is active且元件都已經啟動時調用OnEnable()
@@ -52,6 +63,9 @@ public class Detector : MonoBehaviour
         textureProvider = GetTextureProvider(nn.model);//68行
         textureProvider.Start();
         //WebCamTextureProvider.cs中的Start()，WebCamTextureProvider.cs 繼承textureProvider
+
+        colorBlindMaterial = new Material(colorBlindShader);
+        ImageUI.material = colorBlindMaterial;
     }
 
     private void Update()
@@ -62,7 +76,8 @@ public class Detector : MonoBehaviour
 
         var boxes = yolo.Run(texture);//將調整好大小的畫面匯入yolo模型，Run()函數在YOLOv8.cs中
         DrawResults(boxes, texture);
-        ImageUI.texture = texture;
+        ApplyColorBlindMaterial(texture);
+        //ImageUI.texture = texture;
     }
 
     protected TextureProvider GetTextureProvider(Model model)
@@ -106,6 +121,24 @@ public class Detector : MonoBehaviour
     {
         //對 results（一個 IEnumerable<ResultBox> 的集合）中的每一個 box 元素，都呼叫 DrawBox(box, img) 一次
         results.ForEach(box => DrawBox(box, img));
+
+        boxCount = 0;
+        foreach (var box in results)
+        {
+            if (boxCount >= boxBuffer.Length)
+                break;
+
+            Rect r = box.rect;             // 若 YOLO 輸出非正規化，請除以 img.width/height
+            r.x /= img.width;
+            r.y /= img.height;
+            r.width /= img.width;
+            r.height /= img.height;
+            r.y = 1f - r.y - r.height;     // y 軸翻轉（RawImage UV 原點在左下）
+
+            boxBuffer[boxCount++] = new Vector4(r.x, r.y, r.width, r.height);
+        }
+
+        //ApplyColorBlindMaterial(img); // 把整張圖（含 RGB）交給 shader
     }
 
     protected virtual void DrawBox(ResultBox box, Texture2D img)
@@ -130,5 +163,20 @@ public class Detector : MonoBehaviour
             }
 
         }
+    }
+
+    void ApplyColorBlindMaterial(Texture texture)
+    {
+        if (colorBlindMaterial == null)
+            return;
+
+        colorBlindMaterial.SetTexture("_MainTex", texture); // 這一步把整張圖（含 RGB）交給 shader。
+        colorBlindMaterial.SetVectorArray("_BoxData", boxBuffer);
+        colorBlindMaterial.SetInt("_BoxCount", boxCount);
+        //colorBlindMaterial.SetFloat("_Intensity", colorBlindIntensity);
+        colorBlindMaterial.SetFloat("_WarpStrength", warpStrength);
+        colorBlindMaterial.SetInt("_Mode", colorBlindMode);
+        Graphics.Blit(texture, _rt, colorBlindMaterial);
+        ImageUI.texture = texture;
     }
 }

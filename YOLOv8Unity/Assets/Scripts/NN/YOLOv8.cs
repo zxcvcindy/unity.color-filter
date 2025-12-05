@@ -50,7 +50,7 @@ namespace NN
             foreach (string outputName in nn.model.outputs)//取出模型定義中 outputs 欄位的每個輸出名稱。
             {
                 Tensor output = nn.worker.PeekOutput(outputName);//使用 worker 的 PeekOutput 方法取得對應名稱的輸出張量。
-                Debug.Log($"Output shape: [{string.Join(", ", output)}]");
+                //Debug.Log($"Output shape: [{string.Join(", ", output)}]");
                 yield return output;//逐一回傳 output
             }
         }
