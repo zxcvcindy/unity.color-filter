@@ -1,104 +1,148 @@
-Shader "Custom/ColorBlindHighlight" //定義一個名為 “Custom/ColorBlindHighlight” 的著色器 (Shader)
+Shader "Custom/ColorBlind_LMSColorWarp_Optimized"
 {
     Properties
     {
-        _MainTex   ("Input", 2D) = "white" {} // 貼圖輸入參數，名稱 _MainTex，類型 2D 貼圖（Texture2D），預設為白色。
-        _Intensity ("Mix", Range(0,1)) = 0.7 // 一個浮點數參數 Range(0,1)，名字 “Mix”，用於控制混合強度，預設值為 0.7。
-        _Mode      ("Mode (0=prot,1=deut,2=tri)", Int) = 0 // 整數參數 Mode，說明「0 = Protanopia, 1 = Deuteranopia, 2 = Tritanopia」，預設值為 0。
+        _MainTex ("Input", 2D) = "white" {}
+        _Mode ("Mode 0=prot 1=deut 2=tri", Int) = 1
+        _ContrastStrength ("Contrast Strength", Range(0,2)) = 2
+        
     }
-
-    SubShader // 實際渲染的著色器階段。
+    SubShader
     {
         Tags { "Queue"="Transparent" "RenderType"="Transparent" }
-        // 因為要渲染半透明場景，需要用queue來確保渲染順序(background -> 純色物體 -> AlphaTest -> transparent -> overlay )
-        // 設定這個材質屬於透明渲染隊列 (transparent)，適用於需要覆蓋／混合的場景。
-        Cull Off ZWrite Off ZTest Always 
-        /*
-        Cull Off：關閉背面剔除（即即使物件背面也會渲染）。
-        ZWrite Off：不寫入深度緩衝 (Z-buffer)，表示它不會阻擋後面物件。
-        ZTest Always：深度測試總是通過，該材質會在任何情況下渲染。
-        */
-        Pass // 渲染通道
+        Cull Off ZWrite Off ZTest Always
+
+        Pass
         {
             CGPROGRAM
-            #pragma vertex vert // 指定頂點著色器函式為 vert。
-            #pragma fragment frag // 指定片段 (pixel) 著色器函式為 frag。
-            #include "UnityCG.cginc" // 引入 Unity 預設的 CG／HLSL 共用函式庫。
+            #pragma vertex vert
+            #pragma fragment frag
+            #include "UnityCG.cginc"
 
-            sampler2D _MainTex; // 貼圖採樣器，對應上面 _MainTex 屬性。
-            float4    _MainTex_ST; // 貼圖 UV 的縮放／偏移資訊（Unity 自動提供）。
-            float _WarpStrength;
-            int       _Mode; // 色盲模式參數 (0／1／2)，對應 Properties。
-            float4    _BoxData[64]; // 一個 float4 陣列，最多儲存 64 個框 (bounding boxes) 的資料，每個 float4 通常包含 (x, y, width, height) 的 UV 值。
-            int       _BoxCount; // 實際傳入的框數量。
+            sampler2D _MainTex; float4 _MainTex_ST;
+            int _Mode;
+            float _ContrastStrength;
+            float4 _BoxData[64]; int _BoxCount;
 
+            struct appdata { float4 vertex : POSITION; float2 uv : TEXCOORD0; };
+            struct v2f { float2 uv : TEXCOORD0; float4 pos : SV_POSITION; };
 
-            // sRGB <-> Linear
-            float3 SRGBToLin(float3 c){ return pow(c, 2.2); }
-            float3 LinToSRGB(float3 c){ return pow(saturate(c), 1/2.2); }
+            v2f vert (appdata v)
+            {
+                v2f o;
+                o.pos = UnityObjectToClipPos(v.vertex);
+                o.uv  = TRANSFORM_TEX(v.uv, _MainTex);
+                return o;
+            }
 
-            // RGB -> λ,YB,RG (論文式3)
+            float3 SRGBToLin(float3 c) { return pow(c, 2.2); }
+            float3 LinToSRGB(float3 c) { return pow(saturate(c), 1.0 / 2.2); }
+
             static const float3x3 RGB2OPP = float3x3(
-              0.3479,  0.5981, -0.3657,
-             -0.0074, -0.1130, -1.1858,
-              1.1851, -1.5708,  0.3838
+                0.3479,  0.5981, -0.3657,
+               -0.0074, -0.1130, -1.1858,
+                1.1851, -1.5708,  0.3838
             );
-            // λ,YB,RG -> RGB (論文式4)
             static const float3x3 OPP2RGB = float3x3(
-              1.2256, -0.2217,  0.4826,
-              0.9018, -0.3645, -0.2670,
-             -0.0936, -0.8072,  0.0224
+                1.2256, -0.2217,  0.4826,
+                0.9018, -0.3645, -0.2670,
+               -0.0936, -0.8072,  0.0224
             );
 
-            // 若要用固定模擬角，可在此保留，暫不用：
-            // float3 _SimAngles = float3(radians(150), radians(140), radians(80));
+            static const float3x3 RGB2LMS = float3x3(
+                17.8824, 43.5161, 4.11935, 
+                3.45565, 27.1554, 3.86714,
+                0.0299566, 0.184309, 1.46709
+            );
+            static const float3x3 LMS2RGB = float3x3(
+                0.0809, -0.1305, 0.1167,
+                -0.0102, 0.0540, -0.1136,
+                -0.0004, -0.0041, 0.6935
+            );
 
-            // 對立色平面扭曲：把角度往反方向推，強度由 warp 控制
+            static const float3x3 M_PROT = float3x3(
+                0, 2.02344, -2.52581,
+                0, 1, 0,
+                0, 0, 1
+            );
+            static const float3x3 M_DEUT = float3x3(
+                1, 0, 0,
+                0.494207, 0, 1.24827,
+                0, 0, 1
+            );
+            static const float3x3 M_TRI = float3x3(
+                1, 0, 0, 
+                0, 1, 0,
+                -0.395913, 0.801109, 0
+            );
+
+            float2 OppYB_RG(float3 opp) { return opp.yz; }
+            
+            // Opponent-plane inverse rotation: push toward the opposite hue by warp
             float2 WarpOpp(float2 yb_rg, float warp)
             {
                 float theta = atan2(yb_rg.y, yb_rg.x);
-                float theta_new = lerp(theta, theta + 3.14159265, warp);
+                float theta_new = lerp(theta, theta + 2.3561925, warp);
                 float len = length(yb_rg);
                 return float2(cos(theta_new), sin(theta_new)) * len;
             }
 
+            // Convenience: apply opponent-plane warp to an sRGB color
             float3 ColorWarp(float3 srgb, float warp)
             {
                 float3 opp = mul(RGB2OPP, SRGBToLin(srgb)); // λ,YB,RG
                 float lambda = opp.x;
                 float2 yb_rg = opp.yz;
-
-                yb_rg = WarpOpp(yb_rg, warp); // 以 warp 控制推開程度
-
+                yb_rg = WarpOpp(yb_rg, warp);
                 float3 oppWarped = float3(lambda, yb_rg.x, yb_rg.y);
                 float3 rgbLin = mul(OPP2RGB, oppWarped);
                 return LinToSRGB(rgbLin);
             }
 
-            struct appdata { float4 vertex:POSITION; float2 uv:TEXCOORD0; };
-            struct v2f { float4 pos:SV_POSITION; float2 uv:TEXCOORD0; };
 
-            v2f vert(appdata v){
-                v2f o; o.pos = UnityObjectToClipPos(v.vertex);
-                o.uv = TRANSFORM_TEX(v.uv, _MainTex);
-                return o;
-            }
-
-            fixed4 frag(v2f i) : SV_Target
+            fixed4 frag (v2f i) : SV_Target
             {
                 float3 src = tex2D(_MainTex, i.uv).rgb;
 
                 bool inside = false;
-                [loop] for (int idx = 0; idx < _BoxCount; idx++) {
-                    float4 b = _BoxData[idx];
-                    if (i.uv.x >= b.x && i.uv.x <= b.x + b.z &&
-                        i.uv.y >= b.y && i.uv.y <= b.y + b.w) { inside = true; break; }
+                for (int b = 0; b < _BoxCount; b++)
+                {
+                    float4 box = _BoxData[b];
+                    if (i.uv.x>=box.x && i.uv.x<=box.x+box.z &&
+                        i.uv.y>=box.y && i.uv.y<=box.y+box.w)
+                    { inside = true; break; }
                 }
 
-                if (inside) {
-                    src = ColorWarp(src, _WarpStrength);
+                if (inside)
+                {
+                    float3 lin = SRGBToLin(src);
+
+                    // 1) Simulate CVD color perception
+                    float3 lms = mul(RGB2LMS, lin);
+                    float3x3 M = (_Mode==0) ? M_PROT : (_Mode==1) ? M_DEUT : M_TRI;
+                    float3 simLms = mul(M, lms);
+                    float3 simLin = mul(LMS2RGB, simLms);
+                    float3 simRGBlin = simLin;
+
+                    // 2) Opponent space representation
+                    float3 oppOrig = mul(RGB2OPP, lin);
+                    float3 oppSim  = mul(RGB2OPP, simRGBlin);
+
+                    float2 oOrig2 = OppYB_RG(oppOrig);
+                    float2 oSim2  = OppYB_RG(oppSim);
+
+                    float2 diff2 = oOrig2 - oSim2;
+                    float dist2 = length(diff2);
+                    float modeBoost = (_Mode==0) ? 1.3 : (_Mode==1) ? 1.5 : 0.8;
+                    float warp = saturate(dist2 * _ContrastStrength * modeBoost); // adaptive strength
+
+                    // warp the simulated view in the opposite direction to separate hues
+                    float3 simSRGB = LinToSRGB(simRGBlin);
+                    float3 compSRGB = ColorWarp(simSRGB, warp);
+                    src = compSRGB;
                 }
-                return float4(src, 1);
+
+                return float4(src,1);
             }
             ENDCG
         }

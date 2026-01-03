@@ -29,7 +29,7 @@ public class Detector : MonoBehaviour
     [Range(0.0f, 1f)]
     [Tooltip("The minimum value of box confidence below which boxes won't be drawn.")]
     [SerializeField]
-    protected float MinBoxConfidence = 0.3f;
+    protected float MinBoxConfidence = 0.5f;
 
     [SerializeField]
     protected TextureProviderType.ProviderType textureProviderType;//TextureProviderType.ProviderType在TextureProvider.cs
@@ -50,8 +50,23 @@ public class Detector : MonoBehaviour
     int boxCount;
     YOLOv8 yolo;
     RenderTexture _rt;
+    float positionEma = 0.5f;
+    float scoreEma = 0.5f;
+    float matchIoU = 0.5f;
+    int enterFrames = 2;
+    int exitFrames = 3;
+    [SerializeField, Range(0f, 1f)] float unmatchedDecay = 0.85f;
 
-    [SerializeField, Range(0f, 1f)] float warpStrength = 0.7f;
+    class TrackedBox
+    {
+        public Rect rect;
+        public float score;
+        public int classIndex;
+        public int seen;     // matched frames
+        public int missed;   // consecutive unmatched frames
+    }
+
+    readonly List<TrackedBox> tracks = new();
 
     private void OnEnable()
     //當進入play mode， GameObject is active且元件都已經啟動時調用OnEnable()
@@ -73,11 +88,16 @@ public class Detector : MonoBehaviour
     {
         YOLOv8OutputReader.DiscardThreshold = MinBoxConfidence;//0.3f
         Texture2D texture = GetNextTexture();//90行，將webcam畫面調成符合模型的大小，並至中
-
+        var rawBoxes = yolo.Run(texture);
+        var boxes = SmoothAndTrack(rawBoxes);
+        DrawResults(boxes, texture);
+        ApplyColorBlindMaterial(texture);
+        /*
         var boxes = yolo.Run(texture);//將調整好大小的畫面匯入yolo模型，Run()函數在YOLOv8.cs中
         DrawResults(boxes, texture);
         ApplyColorBlindMaterial(texture);
         //ImageUI.texture = texture;
+        */
     }
 
     protected TextureProvider GetTextureProvider(Model model)
@@ -173,10 +193,87 @@ public class Detector : MonoBehaviour
         colorBlindMaterial.SetTexture("_MainTex", texture); // 這一步把整張圖（含 RGB）交給 shader。
         colorBlindMaterial.SetVectorArray("_BoxData", boxBuffer);
         colorBlindMaterial.SetInt("_BoxCount", boxCount);
-        //colorBlindMaterial.SetFloat("_Intensity", colorBlindIntensity);
-        colorBlindMaterial.SetFloat("_WarpStrength", warpStrength);
         colorBlindMaterial.SetInt("_Mode", colorBlindMode);
         Graphics.Blit(texture, _rt, colorBlindMaterial);
-        ImageUI.texture = texture;
+        ImageUI.texture = _rt;
     }
+
+    List<ResultBox> SmoothAndTrack(List<ResultBox> detections)
+    {
+        Profiler.BeginSample("Detector.SmoothAndTrack");
+
+        // Age existing tracks
+        foreach (var t in tracks) t.missed++;
+
+        // Greedy IoU matching
+        foreach (var det in detections)
+        {
+            TrackedBox best = null;
+            float bestIoU = matchIoU;
+            foreach (var t in tracks)
+            {
+                float iou = IntersectionOverUnion.CalculateIOU(t.rect, det.rect);
+                if (iou > bestIoU)
+                {
+                    bestIoU = iou;
+                    best = t;
+                }
+            }
+
+            if (best != null)
+            {
+                best.rect = LerpRect(best.rect, det.rect, positionEma);
+                best.score = Mathf.Lerp(best.score, det.score, scoreEma);
+                best.classIndex = det.bestClassIndex;
+                best.seen++;
+                best.missed = 0;
+            }
+            else
+            {
+                tracks.Add(new TrackedBox
+                {
+                    rect = det.rect,
+                    score = det.score,
+                    classIndex = det.bestClassIndex,
+                    seen = 1,
+                    missed = 0
+                });
+            }
+        }
+
+        // Decay / drop old tracks
+        for (int i = tracks.Count - 1; i >= 0; i--)
+        {
+            var t = tracks[i];
+            if (t.missed > exitFrames || t.score < MinBoxConfidence * 0.3f)
+            {
+                tracks.RemoveAt(i);
+            }
+            else if (t.missed > 0)
+            {
+                t.score *= unmatchedDecay; // fade when temporarily lost
+            }
+        }
+
+        // Only output stable tracks (hysteresis)
+        var output = new List<ResultBox>();
+        foreach (var t in tracks)
+        {
+            if (t.seen >= enterFrames && t.missed <= exitFrames && t.score >= MinBoxConfidence)
+                output.Add(new ResultBox(t.rect, t.score, t.classIndex));
+        }
+
+        Profiler.EndSample();
+        return output;
+    }
+
+    Rect LerpRect(Rect a, Rect b, float alpha)
+    {
+        return new Rect(
+            Mathf.Lerp(a.x, b.x, alpha),
+            Mathf.Lerp(a.y, b.y, alpha),
+            Mathf.Lerp(a.width, b.width, alpha),
+            Mathf.Lerp(a.height, b.height, alpha));
+    }
+    public void SetMode(int mode) { colorBlindMode = mode; if (colorBlindMaterial) colorBlindMaterial.SetInt("_Mode", mode); }
 }

@@ -407,8 +407,8 @@ MonoBehaviour:
   textureProvider:
     rid: 1110488524758188042
   colorBlindShader: {fileID: 4800000, guid: b2e5b70190c26c5459953a132b090fdd, type: 3}
-  colorBlindMode: 1
-  warpStrength: 0.7
+  colorBlindMode: 0
+  unmatchedDecay: 0.85
   references:
     version: 2
     RefIds:
