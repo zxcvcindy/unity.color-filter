@@ -8,7 +8,7 @@ public class NNHandler : System.IDisposable
     public NNHandler(NNModel nnmodel)
     {
         model = ModelLoader.Load(nnmodel);
-        worker = WorkerFactory.CreateWorker(model);
+        worker = WorkerFactory.CreateWorker(WorkerFactory.Type.CSharpBurst, model);//.CSharpBurst --> Unity Burst implementation, fastest CPU option
         //WorkerFactory.CreateWorker()為Barracuda的API
     }
 

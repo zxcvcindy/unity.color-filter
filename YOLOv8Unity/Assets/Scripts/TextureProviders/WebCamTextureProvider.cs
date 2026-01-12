@@ -12,6 +12,8 @@ namespace Assets.Scripts.TextureProviders
         [SerializeField]
         private string cameraName;
         private WebCamTexture webCamTexture;
+        public int RotationAngle => webCamTexture != null ? webCamTexture.videoRotationAngle : 0;
+        public bool IsVerticallyMirrored => webCamTexture != null && webCamTexture.videoVerticallyMirrored;
 
         public WebCamTextureProvider(int width, int height, TextureFormat format = TextureFormat.RGB24, string cameraName = null) : base(width, height, format)
         /*「: base(width, height, format)」這表示該構造函式呼叫其父類別（TextureProvider）的構造函式，
@@ -43,7 +45,11 @@ namespace Assets.Scripts.TextureProviders
 
         public override void Stop()
         {
-            webCamTexture.Stop();
+            if (webCamTexture == null)
+                return;
+
+            if (webCamTexture.isPlaying)
+                webCamTexture.Stop();
         }
 
         public override TextureProviderType.ProviderType TypeEnum()

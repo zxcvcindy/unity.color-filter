@@ -18,12 +18,12 @@ namespace Assets.Scripts.TextureProviders
         {
             ResultTexture = new Texture2D(width, height, format, mipChain: false);
         }
-
+        /*移除 finalizer，避免在 GC thread 呼叫 Unity API
         ~TextureProvider()
         {
             Stop();
         }
-
+        */
         public abstract void Start();
 
         public abstract void Stop();

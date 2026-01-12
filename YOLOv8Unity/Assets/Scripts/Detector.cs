@@ -86,8 +86,19 @@ public class Detector : MonoBehaviour
     private void Update()
     //Update is called every frame, if the MonoBehaviour is enabled.
     {
+
         YOLOv8OutputReader.DiscardThreshold = MinBoxConfidence;//0.3f
         Texture2D texture = GetNextTexture();//90行，將webcam畫面調成符合模型的大小，並至中
+
+        if (texture == null || texture.width <= 16 || texture.height <= 16)
+            return;
+
+        if (_rt == null || _rt.width != texture.width || _rt.height != texture.height)
+        {
+            _rt?.Release();
+            _rt = new RenderTexture(texture.width, texture.height, 0, RenderTextureFormat.ARGB32);
+        }
+
         var rawBoxes = yolo.Run(texture);
         var boxes = SmoothAndTrack(rawBoxes);
         DrawResults(boxes, texture);
@@ -135,6 +146,12 @@ public class Detector : MonoBehaviour
     {
         nn.Dispose();
         textureProvider.Stop();
+
+        if (_rt != null)
+        {
+            _rt.Release();
+            _rt = null;
+        }
     }
 
     protected void DrawResults(IEnumerable<ResultBox> results, Texture2D img)
@@ -196,6 +213,19 @@ public class Detector : MonoBehaviour
         colorBlindMaterial.SetInt("_Mode", colorBlindMode);
         Graphics.Blit(texture, _rt, colorBlindMaterial);
         ImageUI.texture = _rt;
+        //以下為更新UI角度
+        var camProvider = textureProvider as Assets.Scripts.TextureProviders.WebCamTextureProvider;
+        if (camProvider != null)
+        {
+            float angle = -camProvider.RotationAngle; // Unity UI 方向需要反向
+            ImageUI.rectTransform.localEulerAngles = new Vector3(0f, 0f, angle);
+
+            // 如果前鏡頭鏡像，Y 軸翻轉
+            if (camProvider.IsVerticallyMirrored)
+                ImageUI.rectTransform.localScale = new Vector3(1f, -1f, 1f);
+            else
+                ImageUI.rectTransform.localScale = Vector3.one;
+        }
     }
 
     List<ResultBox> SmoothAndTrack(List<ResultBox> detections)
