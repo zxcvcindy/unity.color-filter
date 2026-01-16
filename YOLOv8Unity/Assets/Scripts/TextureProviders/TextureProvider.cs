@@ -18,12 +18,6 @@ namespace Assets.Scripts.TextureProviders
         {
             ResultTexture = new Texture2D(width, height, format, mipChain: false);
         }
-        /*移除 finalizer，避免在 GC thread 呼叫 Unity API
-        ~TextureProvider()
-        {
-            Stop();
-        }
-        */
         public abstract void Start();
 
         public abstract void Stop();
@@ -48,13 +42,16 @@ namespace Assets.Scripts.TextureProviders
         {
             providers = new TextureProvider[]{
                 RuntimeHelpers.GetUninitializedObject(typeof(WebCamTextureProvider)) as WebCamTextureProvider,
-                RuntimeHelpers.GetUninitializedObject(typeof(VideoTextureProvider)) as VideoTextureProvider };
+                RuntimeHelpers.GetUninitializedObject(typeof(VideoTextureProvider)) as VideoTextureProvider
+                 };
+            //RuntimeHelpers.GetUninitializedObject(typeof(VuforiaTextureProvider)) as VuforiaTextureProvider
         }
 
         public enum ProviderType
         {
             WebCam,
             Video
+            //Vuforia
         }
 
         static public Type GetProviderType(ProviderType type)

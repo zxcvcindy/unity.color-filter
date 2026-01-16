@@ -57,6 +57,10 @@ public class Detector : MonoBehaviour
     int exitFrames = 3;
     [SerializeField, Range(0f, 1f)] float unmatchedDecay = 0.85f;
 
+    [SerializeField, Range(0f, 2f)] float colorBlindIntensity = 1.2f;
+    [SerializeField] Slider contrastSlider;
+
+
     class TrackedBox
     {
         public Rect rect;
@@ -67,6 +71,14 @@ public class Detector : MonoBehaviour
     }
 
     readonly List<TrackedBox> tracks = new();
+    public void SetContrastStrength(float value)
+    {
+        colorBlindIntensity = value;
+        if (colorBlindMaterial != null)
+            colorBlindMaterial.SetFloat("_ContrastStrength", colorBlindIntensity);
+    }
+
+
 
     private void OnEnable()
     //當進入play mode， GameObject is active且元件都已經啟動時調用OnEnable()
@@ -81,7 +93,17 @@ public class Detector : MonoBehaviour
 
         colorBlindMaterial = new Material(colorBlindShader);
         ImageUI.material = colorBlindMaterial;
+        if (contrastSlider != null)
+        {
+            contrastSlider.minValue = 0f;
+            contrastSlider.maxValue = 2f;
+            contrastSlider.value = colorBlindIntensity;
+            contrastSlider.onValueChanged.AddListener(SetContrastStrength);
+        }
+
     }
+
+
 
     private void Update()
     //Update is called every frame, if the MonoBehaviour is enabled.
@@ -103,12 +125,7 @@ public class Detector : MonoBehaviour
         var boxes = SmoothAndTrack(rawBoxes);
         DrawResults(boxes, texture);
         ApplyColorBlindMaterial(texture);
-        /*
-        var boxes = yolo.Run(texture);//將調整好大小的畫面匯入yolo模型，Run()函數在YOLOv8.cs中
-        DrawResults(boxes, texture);
-        ApplyColorBlindMaterial(texture);
-        //ImageUI.texture = texture;
-        */
+
     }
 
     protected TextureProvider GetTextureProvider(Model model)
@@ -116,7 +133,7 @@ public class Detector : MonoBehaviour
         var firstInput = model.inputs[0];
         int height = firstInput.shape[6];
         int width = firstInput.shape[5];
-        Debug.Log($"Input shape: [{string.Join(",", firstInput.shape)}]");
+        //Debug.Log($"Input shape: [{string.Join(",", firstInput.shape)}]");
         TextureProvider provider;
         switch (textureProviderType)
         /*TextureProviderType.ProviderType型態的變數，根據一個枚舉 (enum) 變數 textureProviderType 的值
@@ -130,8 +147,14 @@ public class Detector : MonoBehaviour
             case TextureProviderType.ProviderType.Video:
                 provider = new VideoTextureProvider(textureProvider as VideoTextureProvider, width, height);
                 break;
+            /*
+            case TextureProviderType.ProviderType.Vuforia:
+                provider = new VuforiaTextureProvider(width, height);
+                break;
+            */
             default:
                 throw new InvalidEnumArgumentException();
+
         }
         return provider;
     }
@@ -204,6 +227,7 @@ public class Detector : MonoBehaviour
 
     void ApplyColorBlindMaterial(Texture texture)
     {
+
         if (colorBlindMaterial == null)
             return;
 
@@ -211,9 +235,11 @@ public class Detector : MonoBehaviour
         colorBlindMaterial.SetVectorArray("_BoxData", boxBuffer);
         colorBlindMaterial.SetInt("_BoxCount", boxCount);
         colorBlindMaterial.SetInt("_Mode", colorBlindMode);
+
         Graphics.Blit(texture, _rt, colorBlindMaterial);
         ImageUI.texture = _rt;
         //以下為更新UI角度
+        colorBlindMaterial.SetFloat("_ContrastStrength", colorBlindIntensity);
         var camProvider = textureProvider as Assets.Scripts.TextureProviders.WebCamTextureProvider;
         if (camProvider != null)
         {
@@ -307,3 +333,5 @@ public class Detector : MonoBehaviour
     }
     public void SetMode(int mode) { colorBlindMode = mode; if (colorBlindMaterial) colorBlindMaterial.SetInt("_Mode", mode); }
 }
+
+

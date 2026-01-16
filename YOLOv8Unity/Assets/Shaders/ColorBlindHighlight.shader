@@ -5,7 +5,11 @@ Shader "Custom/ColorBlind_LMSColorWarp_Optimized"
         _MainTex ("Input", 2D) = "white" {}
         _Mode ("Mode 0=prot 1=deut 2=tri", Int) = 1
         _ContrastStrength ("Contrast Strength", Range(0,2)) = 2
-        
+        _HighlightReduce ("Highlight Reduce", Range(0,1)) = 0.6
+
+        _ChromaProtect ("Chroma Protect", Range(0,1)) = 0.8
+        _ContrastProtect ("Contrast Protect", Range(0,1)) = 0.8
+
     }
     SubShader
     {
@@ -18,14 +22,18 @@ Shader "Custom/ColorBlind_LMSColorWarp_Optimized"
             #pragma vertex vert
             #pragma fragment frag
             #include "UnityCG.cginc"
-
             sampler2D _MainTex; float4 _MainTex_ST;
             int _Mode;
             float _ContrastStrength;
             float4 _BoxData[64]; int _BoxCount;
-
             struct appdata { float4 vertex : POSITION; float2 uv : TEXCOORD0; };
             struct v2f { float2 uv : TEXCOORD0; float4 pos : SV_POSITION; };
+            float _HighlightReduce;
+
+            float _ChromaProtect;
+            float _ContrastProtect;
+
+
 
             v2f vert (appdata v)
             {
@@ -134,7 +142,23 @@ Shader "Custom/ColorBlind_LMSColorWarp_Optimized"
                     float2 diff2 = oOrig2 - oSim2;
                     float dist2 = length(diff2);
                     float modeBoost = (_Mode==0) ? 1.3 : (_Mode==1) ? 1.5 : 0.8;
-                    float warp = saturate(dist2 * _ContrastStrength * modeBoost); // adaptive strength
+
+                    float luma = dot(lin, float3(0.2126, 0.7152, 0.0722));
+                    // 色差保護：色彩強度低 → 減少 warp
+                    float chroma = length(oOrig2);
+                    float chromaGate = smoothstep(0.05, 0.15, chroma);
+                    float chromaAtten = lerp(1.0, chromaGate, _ChromaProtect);
+
+                    // 對比保護：亮度對比低 → 減少 warp
+                    float contrastGate = smoothstep(0.05, 0.15, abs(luma - 0.5));
+                    float contrastAtten = lerp(1.0, contrastGate, _ContrastProtect);
+
+                    float warp = saturate(dist2 * _ContrastStrength * modeBoost) * chromaAtten * contrastAtten;
+                    // 用線性 RGB 估計亮度
+                    //float luma = dot(lin, float3(0.2126, 0.7152, 0.0722));
+                    // 高亮區減少 warp 強度，避免淺色區顏色過度接近
+                    //float highlightAtten = 1.0 - (_HighlightReduce * smoothstep(0.65, 0.9, luma));
+                    //float warp = saturate(dist2 * _ContrastStrength * modeBoost)* highlightAtten; // adaptive strength
 
                     // warp the simulated view in the opposite direction to separate hues
                     float3 simSRGB = LinToSRGB(simRGBlin);

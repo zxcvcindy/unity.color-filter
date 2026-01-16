@@ -75,3 +75,7 @@ crashlytics-build.properties
 *.onnx.meta
 *.mp4
 *.mp4.meta
+
+# Unity package tarballs (can exceed GitHub 100MB limit)
+YOLOv8Unity/Packages/*.tgz
+*.tgz
