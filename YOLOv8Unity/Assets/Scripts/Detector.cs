@@ -59,6 +59,7 @@ public class Detector : MonoBehaviour
 
     [SerializeField, Range(0f, 2f)] float colorBlindIntensity = 1.2f;
     [SerializeField] Slider contrastSlider;
+    [SerializeField] Dropdown modeDropdown;
 
 
     class TrackedBox
@@ -99,6 +100,11 @@ public class Detector : MonoBehaviour
             contrastSlider.maxValue = 2f;
             contrastSlider.value = colorBlindIntensity;
             contrastSlider.onValueChanged.AddListener(SetContrastStrength);
+        }
+        if (modeDropdown != null)
+        {
+            modeDropdown.onValueChanged.AddListener(SetMode);
+            modeDropdown.value = colorBlindMode;
         }
 
     }
@@ -175,6 +181,8 @@ public class Detector : MonoBehaviour
             _rt.Release();
             _rt = null;
         }
+        if (modeDropdown != null)
+            modeDropdown.onValueChanged.RemoveListener(SetMode);
     }
 
     protected void DrawResults(IEnumerable<ResultBox> results, Texture2D img)
@@ -235,6 +243,7 @@ public class Detector : MonoBehaviour
         colorBlindMaterial.SetVectorArray("_BoxData", boxBuffer);
         colorBlindMaterial.SetInt("_BoxCount", boxCount);
         colorBlindMaterial.SetInt("_Mode", colorBlindMode);
+        //Debug.Log("SetMode: " + colorBlindMode);
 
         Graphics.Blit(texture, _rt, colorBlindMaterial);
         ImageUI.texture = _rt;
@@ -331,7 +340,14 @@ public class Detector : MonoBehaviour
             Mathf.Lerp(a.width, b.width, alpha),
             Mathf.Lerp(a.height, b.height, alpha));
     }
-    public void SetMode(int mode) { colorBlindMode = mode; if (colorBlindMaterial) colorBlindMaterial.SetInt("_Mode", mode); }
+
+    public void SetMode(int mode)
+    {
+        colorBlindMode = mode;
+        if (colorBlindMaterial) colorBlindMaterial.SetInt("_Mode", mode);
+        Debug.Log("SetMode: " + mode);
+    }
+
 }
 
 
