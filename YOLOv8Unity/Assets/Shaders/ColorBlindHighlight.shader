@@ -3,13 +3,17 @@ Shader "Custom/ColorBlind_LMSColorWarp_Optimized"
     Properties
     {
         _MainTex ("Input", 2D) = "white" {}
-        _Mode ("Mode 0=prot 1=deut 2=tri", Int) = 1
+        [Enum(PortDeut, 0, Tri, 1)]
+        _Mode ("Mode", Int) = 0
+        //_Mode ("Mode 0=prot/deut 1=tri", Int) = 0
         _ContrastStrength ("Contrast Strength", Range(0,2)) = 2
         _HighlightReduce ("Highlight Reduce", Range(0,1)) = 0.6
-
         _ChromaProtect ("Chroma Protect", Range(0,1)) = 0.8
         _ContrastProtect ("Contrast Protect", Range(0,1)) = 0.8
+        _ProtDeutAngle ("RG Warp Angle (deg)", Range(0,180)) = 135
+        //_TriAngle ("YB Warp Angle (deg)", Range(-180,180)) = -120
 
+        _TriScale ("Tri YB Scale", Range(-2,2)) = -0.8
     }
     SubShader
     {
@@ -29,11 +33,12 @@ Shader "Custom/ColorBlind_LMSColorWarp_Optimized"
             struct appdata { float4 vertex : POSITION; float2 uv : TEXCOORD0; };
             struct v2f { float2 uv : TEXCOORD0; float4 pos : SV_POSITION; };
             float _HighlightReduce;
-
             float _ChromaProtect;
             float _ContrastProtect;
+            float _ProtDeutAngle;
+            //float _TriAngle;
 
-
+            float _TriScale;
 
             v2f vert (appdata v)
             {
@@ -85,23 +90,34 @@ Shader "Custom/ColorBlind_LMSColorWarp_Optimized"
             );
 
             float2 OppYB_RG(float3 opp) { return opp.yz; }
-            
+            float2 WarpOpp_Tri(float2 yb_rg, float warp, float ybScale, float ybPush)
+            {
+                // yb_rg.x = YB, yb_rg.y = RG
+                float yb = yb_rg.x + ybPush * warp * _TriScale;
+                //float yb = yb_rg.x * (1.0 + warp * ybScale);
+                return float2(yb, yb_rg.y);
+            }
+
             // Opponent-plane inverse rotation: push toward the opposite hue by warp
-            float2 WarpOpp(float2 yb_rg, float warp)
+            float2 WarpOpp(float2 yb_rg, float warp, float angleRad)
             {
                 float theta = atan2(yb_rg.y, yb_rg.x);
-                float theta_new = lerp(theta, theta + 2.3561925, warp);
+                float theta_new = lerp(theta, theta + angleRad, warp);
                 float len = length(yb_rg);
                 return float2(cos(theta_new), sin(theta_new)) * len;
             }
 
             // Convenience: apply opponent-plane warp to an sRGB color
-            float3 ColorWarp(float3 srgb, float warp)
+            float3 ColorWarp(float3 srgb, float warp, float angleRad, float ybPush)
             {
                 float3 opp = mul(RGB2OPP, SRGBToLin(srgb)); // λ,YB,RG
                 float lambda = opp.x;
                 float2 yb_rg = opp.yz;
-                yb_rg = WarpOpp(yb_rg, warp);
+                if (_Mode == 1)
+                    yb_rg = WarpOpp_Tri(yb_rg, warp, _TriScale, ybPush);
+                else
+                    yb_rg = WarpOpp(yb_rg, warp, angleRad);
+                //yb_rg = WarpOpp(yb_rg, warp, angleRad);
                 float3 oppWarped = float3(lambda, yb_rg.x, yb_rg.y);
                 float3 rgbLin = mul(OPP2RGB, oppWarped);
                 return LinToSRGB(rgbLin);
@@ -127,7 +143,8 @@ Shader "Custom/ColorBlind_LMSColorWarp_Optimized"
 
                     // 1) Simulate CVD color perception
                     float3 lms = mul(RGB2LMS, lin);
-                    float3x3 M = (_Mode==0) ? M_PROT : (_Mode==1) ? M_DEUT : M_TRI;
+                    float3x3 M = (_Mode==0) ? M_PROT : M_TRI;
+                    //float3x3 M = (_Mode==0) ? M_PROT : (_Mode==1) ? M_DEUT : M_TRI;
                     float3 simLms = mul(M, lms);
                     float3 simLin = mul(LMS2RGB, simLms);
                     float3 simRGBlin = simLin;
@@ -141,7 +158,7 @@ Shader "Custom/ColorBlind_LMSColorWarp_Optimized"
 
                     float2 diff2 = oOrig2 - oSim2;
                     float dist2 = length(diff2);
-                    float modeBoost = (_Mode==0) ? 1.3 : (_Mode==1) ? 1.5 : 0.8;
+                    float modeBoost = (_Mode==0) ? 1.3 : 0.8;
 
                     float luma = dot(lin, float3(0.2126, 0.7152, 0.0722));
                     // 色差保護：色彩強度低 → 減少 warp
@@ -162,7 +179,8 @@ Shader "Custom/ColorBlind_LMSColorWarp_Optimized"
 
                     // warp the simulated view in the opposite direction to separate hues
                     float3 simSRGB = LinToSRGB(simRGBlin);
-                    float3 compSRGB = ColorWarp(simSRGB, warp);
+                    float angleRad = ((_Mode == 1) ? 0 : _ProtDeutAngle) * 0.01745329252;
+                    float3 compSRGB = ColorWarp(simSRGB, warp, angleRad, diff2.x);
                     src = compSRGB;
                 }
 

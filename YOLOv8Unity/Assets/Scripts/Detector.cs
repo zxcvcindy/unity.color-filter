@@ -42,7 +42,7 @@ public class Detector : MonoBehaviour
 
     [SerializeField] Shader colorBlindShader;
     //[SerializeField, Range(0f, 1f)] float colorBlindIntensity = 0.7f;
-    [SerializeField] int colorBlindMode = 0; // 0=prot,1=deut,2=tri
+    [SerializeField] int colorBlindMode = 0; // 0=prot/deut,2=tri
 
     Material colorBlindMaterial;
     // Material 是 Unity 內建的 UnityEngine.Material 類別，不需要額外安裝。它用來包裝 shader 並存放每個實例的參數，然後掛在 Renderer/RawImage 等元件上。
