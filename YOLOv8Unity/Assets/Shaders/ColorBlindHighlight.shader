@@ -1,0 +1,192 @@
+Shader "Custom/ColorBlind_LMSColorWarp_Optimized"
+{
+    Properties
+    {
+        _MainTex ("Input", 2D) = "white" {}
+        [Enum(PortDeut, 0, Tri, 1)]
+        _Mode ("Mode", Int) = 0
+        //_Mode ("Mode 0=prot/deut 1=tri", Int) = 0
+        _ContrastStrength ("Contrast Strength", Range(0,2)) = 2
+        _HighlightReduce ("Highlight Reduce", Range(0,1)) = 0.6
+        _ChromaProtect ("Chroma Protect", Range(0,1)) = 0.8
+        _ContrastProtect ("Contrast Protect", Range(0,1)) = 0.8
+        _ProtDeutAngle ("RG Warp Angle (deg)", Range(0,180)) = 135
+        //_TriAngle ("YB Warp Angle (deg)", Range(-180,180)) = -120
+
+        _TriScale ("Tri YB Scale", Range(-2,2)) = -0.8
+    }
+    SubShader
+    {
+        Tags { "Queue"="Transparent" "RenderType"="Transparent" }
+        Cull Off ZWrite Off ZTest Always
+
+        Pass
+        {
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #include "UnityCG.cginc"
+            sampler2D _MainTex; float4 _MainTex_ST;
+            int _Mode;
+            float _ContrastStrength;
+            float4 _BoxData[64]; int _BoxCount;
+            struct appdata { float4 vertex : POSITION; float2 uv : TEXCOORD0; };
+            struct v2f { float2 uv : TEXCOORD0; float4 pos : SV_POSITION; };
+            float _HighlightReduce;
+            float _ChromaProtect;
+            float _ContrastProtect;
+            float _ProtDeutAngle;
+            //float _TriAngle;
+
+            float _TriScale;
+
+            v2f vert (appdata v)
+            {
+                v2f o;
+                o.pos = UnityObjectToClipPos(v.vertex);
+                o.uv  = TRANSFORM_TEX(v.uv, _MainTex);
+                return o;
+            }
+
+            float3 SRGBToLin(float3 c) { return pow(c, 2.2); }
+            float3 LinToSRGB(float3 c) { return pow(saturate(c), 1.0 / 2.2); }
+
+            static const float3x3 RGB2OPP = float3x3(
+                0.3479,  0.5981, -0.3657,
+               -0.0074, -0.1130, -1.1858,
+                1.1851, -1.5708,  0.3838
+            );
+            static const float3x3 OPP2RGB = float3x3(
+                1.2256, -0.2217,  0.4826,
+                0.9018, -0.3645, -0.2670,
+               -0.0936, -0.8072,  0.0224
+            );
+
+            static const float3x3 RGB2LMS = float3x3(
+                17.8824, 43.5161, 4.11935, 
+                3.45565, 27.1554, 3.86714,
+                0.0299566, 0.184309, 1.46709
+            );
+            static const float3x3 LMS2RGB = float3x3(
+                0.0809, -0.1305, 0.1167,
+                -0.0102, 0.0540, -0.1136,
+                -0.0004, -0.0041, 0.6935
+            );
+
+            static const float3x3 M_PROT = float3x3(
+                0, 2.02344, -2.52581,
+                0, 1, 0,
+                0, 0, 1
+            );
+            static const float3x3 M_DEUT = float3x3(
+                1, 0, 0,
+                0.494207, 0, 1.24827,
+                0, 0, 1
+            );
+            static const float3x3 M_TRI = float3x3(
+                1, 0, 0, 
+                0, 1, 0,
+                -0.395913, 0.801109, 0
+            );
+
+            float2 OppYB_RG(float3 opp) { return opp.yz; }
+            float2 WarpOpp_Tri(float2 yb_rg, float warp, float ybScale, float ybPush)
+            {
+                // yb_rg.x = YB, yb_rg.y = RG
+                float yb = yb_rg.x + ybPush * warp * _TriScale;
+                //float yb = yb_rg.x * (1.0 + warp * ybScale);
+                return float2(yb, yb_rg.y);
+            }
+
+            // Opponent-plane inverse rotation: push toward the opposite hue by warp
+            float2 WarpOpp(float2 yb_rg, float warp, float angleRad)
+            {
+                float theta = atan2(yb_rg.y, yb_rg.x);
+                float theta_new = lerp(theta, theta + angleRad, warp);
+                float len = length(yb_rg);
+                return float2(cos(theta_new), sin(theta_new)) * len;
+            }
+
+            // Convenience: apply opponent-plane warp to an sRGB color
+            float3 ColorWarp(float3 srgb, float warp, float angleRad, float ybPush)
+            {
+                float3 opp = mul(RGB2OPP, SRGBToLin(srgb)); // λ,YB,RG
+                float lambda = opp.x;
+                float2 yb_rg = opp.yz;
+                if (_Mode == 1)
+                    yb_rg = WarpOpp_Tri(yb_rg, warp, _TriScale, ybPush);
+                else
+                    yb_rg = WarpOpp(yb_rg, warp, angleRad);
+                //yb_rg = WarpOpp(yb_rg, warp, angleRad);
+                float3 oppWarped = float3(lambda, yb_rg.x, yb_rg.y);
+                float3 rgbLin = mul(OPP2RGB, oppWarped);
+                return LinToSRGB(rgbLin);
+            }
+
+
+            fixed4 frag (v2f i) : SV_Target
+            {
+                float3 src = tex2D(_MainTex, i.uv).rgb;
+
+                bool inside = false;
+                for (int b = 0; b < _BoxCount; b++)
+                {
+                    float4 box = _BoxData[b];
+                    if (i.uv.x>=box.x && i.uv.x<=box.x+box.z &&
+                        i.uv.y>=box.y && i.uv.y<=box.y+box.w)
+                    { inside = true; break; }
+                }
+
+                if (inside)
+                {
+                    float3 lin = SRGBToLin(src);
+
+                    // 1) Simulate CVD color perception
+                    float3 lms = mul(RGB2LMS, lin);
+                    float3x3 M = (_Mode==0) ? M_PROT : M_TRI;
+                    //float3x3 M = (_Mode==0) ? M_PROT : (_Mode==1) ? M_DEUT : M_TRI;
+                    float3 simLms = mul(M, lms);
+                    float3 simLin = mul(LMS2RGB, simLms);
+                    float3 simRGBlin = simLin;
+
+                    // 2) Opponent space representation
+                    float3 oppOrig = mul(RGB2OPP, lin);
+                    float3 oppSim  = mul(RGB2OPP, simRGBlin);
+
+                    float2 oOrig2 = OppYB_RG(oppOrig);
+                    float2 oSim2  = OppYB_RG(oppSim);
+
+                    float2 diff2 = oOrig2 - oSim2;
+                    float dist2 = length(diff2);
+                    float modeBoost = (_Mode==0) ? 1.3 : 0.8;
+
+                    float luma = dot(lin, float3(0.2126, 0.7152, 0.0722));
+                    // 色差保護：色彩強度低 → 減少 warp
+                    float chroma = length(oOrig2);
+                    float chromaGate = smoothstep(0.05, 0.15, chroma);
+                    float chromaAtten = lerp(1.0, chromaGate, _ChromaProtect);
+
+                    // 對比保護：亮度對比低 → 減少 warp
+                    float contrastGate = smoothstep(0.05, 0.15, abs(luma - 0.5));
+                    float contrastAtten = lerp(1.0, contrastGate, _ContrastProtect);
+
+                    float warp = saturate(dist2 * _ContrastStrength * modeBoost) * chromaAtten * contrastAtten;
+                    // 用線性 RGB 估計亮度
+                    //float luma = dot(lin, float3(0.2126, 0.7152, 0.0722));
+                    // 高亮區減少 warp 強度，避免淺色區顏色過度接近
+                    //float highlightAtten = 1.0 - (_HighlightReduce * smoothstep(0.65, 0.9, luma));
+                    //float warp = saturate(dist2 * _ContrastStrength * modeBoost)* highlightAtten; // adaptive strength
+
+                    // warp the simulated view in the opposite direction to separate hues
+                    float3 simSRGB = LinToSRGB(simRGBlin);
+                    float angleRad = ((_Mode == 1) ? 0 : _ProtDeutAngle) * 0.01745329252;
+                    float3 compSRGB = ColorWarp(simSRGB, warp, angleRad, diff2.x);
+                    src = compSRGB;
+                }
+
+                return float4(src,1);
+            }
+            ENDCG
+        }
+    }
+}

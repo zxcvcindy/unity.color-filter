@@ -1,0 +1,8 @@
+D:/NSTC project/git-yolo detection/YOLOv8Unity/YOLOv8Unity/.utmp/RelWithDebInfo/151f5s55/arm64-v8a/CMakeFiles/edit_cache.dir
+D:/NSTC project/git-yolo detection/YOLOv8Unity/YOLOv8Unity/.utmp/RelWithDebInfo/151f5s55/arm64-v8a/CMakeFiles/rebuild_cache.dir
+D:/NSTC project/git-yolo detection/YOLOv8Unity/YOLOv8Unity/.utmp/RelWithDebInfo/151f5s55/arm64-v8a/GameActivity/CMakeFiles/game.dir
+D:/NSTC project/git-yolo detection/YOLOv8Unity/YOLOv8Unity/.utmp/RelWithDebInfo/151f5s55/arm64-v8a/GameActivity/CMakeFiles/edit_cache.dir
+D:/NSTC project/git-yolo detection/YOLOv8Unity/YOLOv8Unity/.utmp/RelWithDebInfo/151f5s55/arm64-v8a/GameActivity/CMakeFiles/rebuild_cache.dir
+D:/NSTC project/git-yolo detection/YOLOv8Unity/YOLOv8Unity/.utmp/RelWithDebInfo/151f5s55/arm64-v8a/FramePacing/CMakeFiles/swappywrapper.dir
+D:/NSTC project/git-yolo detection/YOLOv8Unity/YOLOv8Unity/.utmp/RelWithDebInfo/151f5s55/arm64-v8a/FramePacing/CMakeFiles/edit_cache.dir
+D:/NSTC project/git-yolo detection/YOLOv8Unity/YOLOv8Unity/.utmp/RelWithDebInfo/151f5s55/arm64-v8a/FramePacing/CMakeFiles/rebuild_cache.dir

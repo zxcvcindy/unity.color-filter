@@ -1,0 +1,12 @@
+# ninja log v5
+124	1863	7892220242934848	FramePacing/CMakeFiles/swappywrapper.dir/UnitySwappyWrapper.cpp.o	8a8ba5a3b6e02763
+76	4342	7892220268447884	GameActivity/CMakeFiles/game.dir/UGAInputKeyEvent.cpp.o	a9817ae1c7f467e
+48	4382	7892220268114550	GameActivity/CMakeFiles/game.dir/UGAEntry.cpp.o	950e4ae532e93c54
+2	4428	7892220268717538	GameActivity/CMakeFiles/game.dir/UGAConfiguration.cpp.o	d24573813ae32e5c
+24	4436	7892220270626286	GameActivity/CMakeFiles/game.dir/UGADebug.cpp.o	c76d13713821e5cd
+98	4440	7892220270636282	GameActivity/CMakeFiles/game.dir/UGAInputMotionEvent.cpp.o	e7a5d445c1540c4b
+85	4468	7892220273313957	GameActivity/CMakeFiles/game.dir/UGASoftKeyboard.cpp.o	df9fdd25ac0bc3cf
+1880	4486	7892220273605696	D:/NSTC project/git-yolo detection/YOLOv8Unity/YOLOv8Unity/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/RelWithDebInfo/151f5s55/obj/arm64-v8a/libswappywrapper.so	c11639343bd0ad20
+35	4624	7892220275052213	GameActivity/CMakeFiles/game.dir/UGAInput.cpp.o	a69d46274b22d5dc
+14	4864	7892220277447038	GameActivity/CMakeFiles/game.dir/UGAApplication.cpp.o	34b9b08eb67f3010
+4865	5069	7892220279523122	D:/NSTC project/git-yolo detection/YOLOv8Unity/YOLOv8Unity/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/RelWithDebInfo/151f5s55/obj/arm64-v8a/libgame.so	b7da1e7870848890

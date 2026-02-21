@@ -1,0 +1,1 @@
+D:\NSTC project\git-yolo detection\YOLOv8Unity\YOLOv8Unity\Library\Bee\Android\Prj\IL2CPP\Gradle\unityLibrary\build\intermediates\cxx\RelWithDebInfo\1h2g1b3m\obj\arm64-v8a
