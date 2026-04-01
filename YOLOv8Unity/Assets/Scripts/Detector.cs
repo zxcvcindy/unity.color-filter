@@ -61,6 +61,9 @@ public class Detector : MonoBehaviour
     [SerializeField] Slider contrastSlider;
     [SerializeField] Dropdown modeDropdown;
 
+    // 新增用來計算 FPS 的變數
+    private float deltaTime = 0.0f;
+
 
     class TrackedBox
     {
@@ -114,6 +117,8 @@ public class Detector : MonoBehaviour
     private void Update()
     //Update is called every frame, if the MonoBehaviour is enabled.
     {
+        // 加上這行來平滑計算每幀的耗時 (用 unscaledDeltaTime 避免受 Time.timeScale 影響)
+        deltaTime += (Time.unscaledDeltaTime - deltaTime) * 0.1f;
 
         YOLOv8OutputReader.DiscardThreshold = MinBoxConfidence;//0.3f
         Texture2D texture = GetNextTexture();//90行，將webcam畫面調成符合模型的大小，並至中
@@ -346,6 +351,32 @@ public class Detector : MonoBehaviour
         colorBlindMode = mode;
         if (colorBlindMaterial) colorBlindMaterial.SetInt("_Mode", mode);
         Debug.Log("SetMode: " + mode);
+    }
+
+    // 新增 OnGUI 函式來顯示 FPS
+    private void OnGUI()
+    {
+        int w = Screen.width, h = Screen.height;
+
+        GUIStyle style = new GUIStyle();
+
+        // 設定顯示位置與大小 (x, y, width, height)
+        Rect rect = new Rect(20, 20, w, h * 2 / 100);
+
+        // 設定字體對齊、大小與顏色
+        style.alignment = TextAnchor.UpperLeft;
+        style.fontSize = 50; // 若在手機上太小可以調大這個數值
+        style.normal.textColor = Color.green; // 用綠色顯示比較顯眼
+
+        // 計算毫秒與 FPS
+        float msec = deltaTime * 1000.0f;
+        float fps = 1.0f / deltaTime;
+
+        // 格式化字串
+        string text = string.Format("{0:0.0} ms ({1:0.} fps)", msec, fps);
+
+        // 畫在螢幕上
+        GUI.Label(rect, text, style);
     }
 
 }
